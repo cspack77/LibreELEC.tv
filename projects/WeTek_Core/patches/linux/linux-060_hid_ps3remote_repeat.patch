@@ -1,0 +1,66 @@
+--- linux-amlogic-3.10-716f179.orig/drivers/hid/hid-ps3remote.c	2016-01-28 04:52:21.933997999 -0500
++++ linux-amlogic-3.10-716f179/drivers/hid/hid-ps3remote.c	2016-01-28 04:52:50.849997999 -0500
+@@ -183,6 +183,55 @@
+ 	return 1;
+ }
+ 
++static int ps3remote_setup_repeat(struct hid_device *hdev)
++{
++	struct hid_input *hidinput = list_first_entry(&hdev->inputs,
++						 struct hid_input, list);
++	struct input_dev *input = hidinput->input;
++
++	/*
++	 * Set up autorepeat defaults per the remote control subsystem;
++	 * this must be done after hid_hw_start(), as having these non-zero
++	 * at the time of input_register_device() tells the input system that
++	 * the hardware does the autorepeat, and the PS3 remote does not.
++	*/
++	set_bit(EV_REP, input->evbit);
++//	hid_info(hdev, "Delay: %d\n", input->rep[REP_DELAY]);
++//	hid_info(hdev, "Period: %d\n", input->rep[REP_PERIOD]);
++	input->rep[REP_DELAY]  = 150;
++	input->rep[REP_PERIOD] = 30;
++
++	return 0;
++}
++
++static int ps3remote_probe(struct hid_device *hdev, const struct hid_device_id *id)
++{
++	int ret;
++	unsigned int connect_mask = HID_CONNECT_DEFAULT;
++
++	ret = hid_parse(hdev);
++	if (ret) {
++		hid_err(hdev, "parse failed\n");
++		return ret;
++	}
++
++	ret = hid_hw_start(hdev, connect_mask);
++	if (ret) {
++		hid_err(hdev, "hw start failed\n");
++		return ret;
++	}
++
++	ret = ps3remote_setup_repeat(hdev);
++
++	if (ret < 0)
++		goto err_stop;
++
++	return 0;
++err_stop:
++	hid_hw_stop(hdev);
++	return ret;
++}
++
+ static const struct hid_device_id ps3remote_devices[] = {
+ 	/* PS3 BD Remote Control */
+ 	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_SONY, USB_DEVICE_ID_SONY_PS3_BDREMOTE) },
+@@ -197,6 +246,7 @@
+ 	.id_table      = ps3remote_devices,
+ 	.report_fixup  = ps3remote_fixup,
+ 	.input_mapping = ps3remote_mapping,
++	.probe         = ps3remote_probe,
+ };
+ module_hid_driver(ps3remote_driver);
+ 
